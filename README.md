@@ -39,7 +39,12 @@ on private networks, with or without cloud access.
 
 ## Current State
 
-Be an early adopter! Things still to do:
+Be an early adopter! Actually, Monchero Agent can be used to build a complete
+single server monitoring platform. That is, it can periodically check services,
+tracks their state and reports on them (on the command line). By using 'actions',
+it's possible to have it send alerts (email, Slack, Telegram etc) too.
+
+Things still to do:
 
 - Implement a 'push' mechanism
 - CI to build OS packages with the agent inside, proper versioning and strip the
