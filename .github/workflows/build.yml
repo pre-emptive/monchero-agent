@@ -40,4 +40,4 @@ jobs:
           files: |
             monchero-agent-*.deb
             monchero-agent-*.rpm
-          tag_name: "{{ github.ref_name }}"
+          tag_name: "main"
