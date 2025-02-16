@@ -24,8 +24,8 @@ jobs:
         run: |
           export VERSION=`head -n 1 VERSION`
           mkdir -p pkg/usr/bin
-          sed -n '/### Unit tests below here/q;p' linux/monchero-agent.py |sed 's/^VERSION=.*$/VERSION='${VERSION}'/' > pkg/usr/bin/monchero-agent
-          sed -n '/### Unit tests below here/q;p' linux/mstatus.py |sed 's/^VERSION=.*$/VERSION='${VERSION}'/' > pkg/usr/bin/mstatus
+          sed -n '/### Unit tests below here/q;p' linux/monchero-agent.py |sed 's/^VERSION=.*$/VERSION="'${VERSION}'"/' > pkg/usr/bin/monchero-agent
+          sed -n '/### Unit tests below here/q;p' linux/mstatus.py |sed 's/^VERSION=.*$/VERSION="'${VERSION}'"/' > pkg/usr/bin/mstatus
           chmod 755 pkg/usr/bin/*
 
       - name: Make packages
