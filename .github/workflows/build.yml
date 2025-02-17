@@ -19,7 +19,11 @@ jobs:
 
       - name: Prepare the package
         run: |
-          export VERSION=`echo "${{ github.ref_name }}" | sed 's/^[vV]//'`
+          if [[ "${{ github.ref }}" == "refs/tags/*" ]]; then
+            export VERSION=`echo "${{ github.ref_name }}" | sed 's/^[vV]//'`
+          else
+            export VERSION="0.0.1"
+          fi
           mkdir -p pkg/usr/bin
           sed -n '/### Unit tests below here/q;p' linux/monchero-agent.py |sed 's/^VERSION=.*$/VERSION="'${VERSION}'"/' > pkg/usr/bin/monchero-agent
           sed -n '/### Unit tests below here/q;p' linux/mstatus.py |sed 's/^VERSION=.*$/VERSION="'${VERSION}'"/' > pkg/usr/bin/mstatus
@@ -27,7 +31,11 @@ jobs:
 
       - name: Make packages
         run: |
-          export VERSION=`echo "${{ github.ref_name }}" | sed 's/^[vV]//'`
+          if [[ "${{ github.ref }}" == "refs/tags/*" ]]; then
+            export VERSION=`echo "${{ github.ref_name }}" | sed 's/^[vV]//'`
+          else
+            export VERSION="0.0.1"
+          fi
           fpm -s dir -t rpm -p "monchero-agent-${VERSION}-${{ github.run_id }}.rpm" -v "${VERSION}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
           fpm -s dir -t deb -p "monchero-agent-${VERSION}-${{ github.run_id }}.deb" -v "${VERSION}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
           mkdir out
