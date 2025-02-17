@@ -17,11 +17,7 @@ import logging
 import re
 import random
 import socket
-
-DEFAULT_CHECK_DIRECTORY = "/usr/lib/monchero/plugins"
-DEFAULT_STATE_FILE_PATH = "/tmp/state"
-
-DEFAULT_EXECUTION_INTERVAL = 60
+import requests
 
 VERSION="0.0.1"
 
@@ -79,6 +75,7 @@ def insert_executable_into_database(executable):
 def pop_and_reinsert_executable(index=0):
     global executable_database
     executable = executable_database.pop(index)
+    # Add some jitter to the next check time
     next_check = datetime.now(timezone.utc) + timedelta(seconds = executable['interval']) + timedelta(seconds = random.random())
     executable['next_check'] = next_check
     insert_executable_into_database(executable)
@@ -101,14 +98,14 @@ def initialise_executables(executable_dir, executable_type='native', interval=No
         if executable.startswith('.') or executable.endswith('.bak') or  executable.endswith('.rpmsave') or executable.endswith('.old') or executable.endswith('.orig'):
             continue
         filename = os.path.join(executable_dir, executable)
-        # Add a little jitter to the next check to spread executions out
-        next_check = datetime.now(timezone.utc) + timedelta(seconds = random.random())
+        # DON'T add some jitter this time. This makes us run all the checks initially at full speed
+        # so we populate our state immediately, and then spread out checks after that
         insert_executable_into_database({
             'filename': filename,
             'arguments': [],
             'interval': interval,
             'timestamp': datetime.now(timezone.utc),
-            'next_check': next_check,
+            'next_check': datetime.now(timezone.utc),
             'executable_type': executable_type,
         })
 
@@ -534,13 +531,6 @@ def run_executable(executable):
             if key in status:
                 record[key] = status[key]
 
-        #try:
-        #    check_name = element['check_name']
-        #except KeyError:
-            # This does undefined things if there are multiple checks in a single script
-            # Likewise if the check name changes between calls to the check script!
-        #    pass
-
         # Also change the whole check's record of interval if it's included in any
         # individual statuses
         try:
@@ -742,8 +732,7 @@ def executable_runner():
             time.sleep(10)
             continue
 
-        now_time = datetime.now(timezone.utc)
-        exec_diff = then_time - now_time
+        exec_diff = then_time - datetime.now(timezone.utc)
         if exec_diff.total_seconds() < 0.1:
             logger.debug("Running executable {}".format(executable_database[0]))
             new_status = run_executable(executable_database[0])
@@ -752,13 +741,18 @@ def executable_runner():
             pop_and_reinsert_executable()
             continue
 
-        now_time = datetime.now(timezone.utc)
-        save_diff = now_time - last_state_save_time
+        save_diff = datetime.now(timezone.utc) - last_state_save_time
         if save_diff.total_seconds() > 50:
             save_state()
+            if config_args.monchero_server is not None:
+                send_state_to_server()
+            last_state_save_time = datetime.now(timezone.utc)
 
-        logger.debug("sleeping for half of {}".format(exec_diff.total_seconds()))
-        time.sleep(exec_diff.total_seconds() / 2)
+        # Recalculate the wait time so we take into account any time used above
+        exec_diff = then_time - datetime.now(timezone.utc)
+        if exec_diff.total_seconds() > 0.1:
+            logger.debug("sleeping for half of {} (them={})".format(exec_diff.total_seconds(), then_time))
+            time.sleep(exec_diff.total_seconds() / 2)
 
 def json_serial(obj):
     """JSON serializer for objects not serializable by default json code"""
@@ -774,11 +768,39 @@ def save_state():
         'timestamp': datetime.now(timezone.utc).astimezone().isoformat(),
         'checks': check_database,
     }
+    state_filename = "{}/state.json".format(config_args.data_directory)
     try:
-        with open(config_args.state_file_path, 'w', encoding='utf-8') as f:
+        with open(state_filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4, default=json_serial)
     except OSError as e:
-        logger.error("Could not write to state file {}: {}".format(config_args.state_file_path, str(e)))
+        logger.critical("Could not write to state file {}: {}".format(state_filename, str(e)))
+    except TypeError as e:
+        logger.error('Could not serialise the state to save it: {}'.format(str(e)))
+
+def send_state_to_server():
+    protocol = 'https'
+    if not config_args.monchero_server_tls:
+        protocol = 'http'
+
+    data = {
+        'version': VERSION,
+        'hostname': our_hostname,
+        'timestamp': datetime.now(timezone.utc).astimezone().isoformat(),
+        'checks': check_database,
+    }
+
+    # We can't use requests json input here
+    try:
+        data_string = json.dumps(data, default=json_serial)
+    except TypeError as e:
+        logger.error('Could not serialise the state to POST it: {}'.format(str(e)))
+        return
+
+    print("Then time = {} now = {}".format(executable_database[0]['next_check'], datetime.now(timezone.utc)))
+    try:
+        r = requests.post('{}://{}/api/submit_state'.format(protocol, config_args.monchero_server), data=data_string, timeout=config_args.monchero_server_timeout)
+    except requests.exceptions.RequestException as e:
+        logger.error('Could not POST to {}://{}: {}'.format(protocol, config_args.monchero_server, str(e)))
 
 def load_check_configs():
     global check_config
@@ -830,14 +852,16 @@ def main(argv=None):
     )
     parser.add('-c', '--agent-config-path', is_config_file=True, help='Path to the agent configuration file', env_var='MONCHERO_CONFIG_PATH')
     parser.add('-e', '--check-config-path', default='/etc/monchero.d', help='Path to a directory of check configs', env_var='MONCHERO_CHECK_CONFIG_PATH')
-    parser.add('-i', '--interval', default=DEFAULT_EXECUTION_INTERVAL, type=int, help='Set the default execution interval (in seconds)', env_var='MONCHERO_INTERVAL')
-    parser.add('-s', '--state-file-path', default=DEFAULT_STATE_FILE_PATH, help='Set the location of the state file', env_var='MONCHERO_STATE_FILE_PATH')
-    parser.add('-l', '--log-level', default='info', choices=['debug','info','warning','error'], help='Set the log verbosity level', env_var='MONCHERO_LOG_LEVEL')
-    parser.add('-d', '--data-directory', default='/var/monchero', help='The path to a directory to write data files', env_var='MONCHERO_DATA_DIRECTORY')
+    parser.add('-i', '--interval', default=60, type=int, help='Set the default execution interval (in seconds)', env_var='MONCHERO_INTERVAL')
+    parser.add('-l', '--log-level', default='info', choices=['debug','info','warning','error','critical'], help='Set the log verbosity level', env_var='MONCHERO_LOG_LEVEL')
+    parser.add('-d', '--data-directory', default='/var/monchero-agent', help='The path to a directory to write data files', env_var='MONCHERO_DATA_DIRECTORY')
     parser.add('-n', '--node-name', default=our_hostname, help='Set the hostname, rather than using the detected one', env_var='MONCHERO_HOSTNAME')
     parser.add('--monchero-plugin-directory', default='/usr/lib/monchero/plugins', help='The directory to look for Monchero check plugins', env_var='MONCHERO_PLUGIN_DIRECTORY')
     parser.add('--checkmk-plugin-directory', default='/usr/lib/check_mk_agent/local/', help='The directory to look for CheckMK local plugins', env_var='MONCHERO_CHECKMK_PLUGIN_DIRECTORY')
     parser.add('--script-checks-directory', default='/usr/lib/monchero/scripts', help='The directory to look for plain script checks', env_var='MONCHERO_SCRIPT_CHECKS_DIRECTORY')
+    parser.add('-m', '--monchero-server', default=None, help='The poller or server to which the agent will send status', env_var='MONCHERO_SERVER')
+    parser.add('--monchero-server-tls', default=True, type=bool, help='Use TLS to send to the Monchero server', env_var='MONCHERO_SERVER_TLS')
+    parser.add('--monchero-server-timeout', default=30, type=int, help='The number of seconds timeout when sending to the Monchero server', env_var='MONCHERO_SERVER_TIMEOUT')
 
     config_args = parser.parse_args()
 

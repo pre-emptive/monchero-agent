@@ -8,10 +8,13 @@
 import os, sys
 import json
 from datetime import datetime, timezone
+import configargparse
 
-STATE_FILE = '/tmp/state'
-CHECK_INTERVAL = 60
+VERSION="0.0.1"
+
 OUTPUT_CHECK_NAME_WIDTH = 40
+
+config_args = {}
 
 ansi_colours = {
     "red": '\033[0;31m',
@@ -30,21 +33,36 @@ def string_to_width(string, width):
 
     return "{string:{width}s}".format(width=width, string=string)
 
+def main():
+    global config_args
+
+    parser = configargparse.ArgumentParser(
+        default_config_files=['/etc/monchero.conf', './monchero.conf']
+    )
+    parser.add('-c', '--agent-config-path', is_config_file=True, help='Path to the agent configuration file', env_var='MONCHERO_CONFIG_PATH')
+    parser.add('-i', '--interval', default=60, type=int, help='Set the default execution interval (in seconds)', env_var='MONCHERO_INTERVAL')
+    parser.add('-d', '--data-directory', default='/var/monchero-agent', help='The path to a directory to write data files', env_var='MONCHERO_DATA_DIRECTORY')
+
+    config_args = parser.parse_args()
+
+main()
+
 if not sys.stdin or not sys.stdin.isatty():
     ansi_colours = {}
 
+state_filename = "{}/state.json".format(config_args.data_directory)
 try:
-    with open(STATE_FILE, 'r') as f:
+    with open(state_filename, 'r') as f:
         data = json.load(f)
 except OSError as e:
-    print("Could not open Monchero state file at {}: {}".format(STATE_FILE, str(e)))
+    print("Could not open Monchero state file at {}: {}".format(state_filename, str(e)))
     sys.exit(1)
 
 timestamp = datetime.fromisoformat(data['timestamp'])
 diff = datetime.now(timezone.utc).astimezone() - timestamp
 
 diff_int = int(diff.total_seconds())
-if diff_int > 2*CHECK_INTERVAL:
+if diff_int > 2 * config_args.interval:
     print("{}Warning{} State may be stale, timestamp is {} seconds old".format(ansi_colours.get('yellow',''), ansi_colours.get('nc',''), diff_int))
 
 print("State was written at {}".format(timestamp.strftime('%H:%M:%S %m/%d/%Y')))
