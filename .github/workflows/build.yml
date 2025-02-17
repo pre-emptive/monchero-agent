@@ -34,17 +34,6 @@ jobs:
           cp "monchero-agent-${VERSION}-${{ github.run_id }}.rpm" out/monchero-agent.rpm
           cp "monchero-agent-${VERSION}-${{ github.run_id }}.deb" out/monchero-agent.deb
 
-      - name: Save out Apt package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Apt Package
-          path: out/monchero-agent.deb
-      - name: Save out RPM package artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: RPM Package
-          path: out/monchero-agent.rpm
-
       - name: Save out package artifacts
         uses: actions/upload-artifact@v4
         with:
