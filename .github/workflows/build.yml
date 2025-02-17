@@ -1,9 +1,6 @@
 name: Build and Package
 
-on:
-  push:
-    branches:
-      - "main"
+on: push
 
 jobs:
   Build_Release:
@@ -22,7 +19,7 @@ jobs:
 
       - name: Prepare the package
         run: |
-          export VERSION=`head -n 1 VERSION`
+          export VERSION="${{ github.ref_name }}"
           mkdir -p pkg/usr/bin
           sed -n '/### Unit tests below here/q;p' linux/monchero-agent.py |sed 's/^VERSION=.*$/VERSION="'${VERSION}'"/' > pkg/usr/bin/monchero-agent
           sed -n '/### Unit tests below here/q;p' linux/mstatus.py |sed 's/^VERSION=.*$/VERSION="'${VERSION}'"/' > pkg/usr/bin/mstatus
@@ -30,14 +27,14 @@ jobs:
 
       - name: Make packages
         run: |
-          export VERSION=`head -n 1 VERSION`
-          fpm -s dir -t rpm -p monchero-agent-${VERSION}-${{ github.run_id }}.rpm -v 1.0 --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
-          fpm -s dir -t deb -p monchero-agent-${VERSION}-${{ github.run_id }}.deb -v 1.0 --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
+          fpm -s dir -t rpm -p monchero-agent-"${{ github.ref_name }}"-${{ github.run_id }}.rpm -v "${{ github.ref_name }}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
+          fpm -s dir -t deb -p monchero-agent-"${{ github.ref_name }}"-${{ github.run_id }}.deb -v "${{ github.ref_name }}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
 
       - name: Release
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
             monchero-agent-*.deb
             monchero-agent-*.rpm
-          tag_name: "main"
+          tag_name: "${{ github.ref_name }}"
