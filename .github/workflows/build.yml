@@ -36,11 +36,8 @@ jobs:
           else
             export VERSION="0.0.1"
           fi
-          fpm -s dir -t rpm -p "monchero-agent-${VERSION}-${{ github.run_id }}.rpm" -v "${VERSION}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
-          fpm -s dir -t deb -p "monchero-agent-${VERSION}-${{ github.run_id }}.deb" -v "${VERSION}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
-          mkdir out
-          cp "monchero-agent-${VERSION}-${{ github.run_id }}.rpm" out/monchero-agent.rpm
-          cp "monchero-agent-${VERSION}-${{ github.run_id }}.deb" out/monchero-agent.deb
+          fpm -s dir -t rpm -p "monchero-agent-${VERSION}-${{ github.run_id }}.rpm" -v "${VERSION}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -d python3-configargparse -C pkg .
+          fpm -s dir -t deb -p "monchero-agent-${VERSION}-${{ github.run_id }}.deb" -v "${VERSION}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -d python3-configargparse -C pkg .
 
       - name: Save out package artifacts
         uses: actions/upload-artifact@v4

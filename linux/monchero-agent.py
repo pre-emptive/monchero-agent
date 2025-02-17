@@ -360,7 +360,7 @@ def parse_nagios_metric(metric):
 
     # See if there's a Unit of Measurement (UOM)
     try:
-        m = re.match('^([\d.]*)(\D*)$', value)
+        m = re.match(r'^([\d.]*)(\D*)$', value)
         if not m:
             logger.debug('match is none: {}'.format(value))
             return
