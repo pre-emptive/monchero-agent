@@ -823,10 +823,12 @@ def load_check_configs():
             logger.warning('Could not read check config {}: {}'.format(full_path, str(e)))
             continue
 
-        for key in check_config.keys():
-            if key in parsed:
-                # Merge the parsed config into our own
-                check_config[key] = {**check_config[key], **parsed[key]}
+        # parsed can be None if the file is empty or just comments
+        if parsed is not None:
+            for key in check_config.keys():
+                if key in parsed:
+                    # Merge the parsed config into our own
+                    check_config[key] = {**check_config[key], **parsed[key]}
 
 def get_our_hostname():
     tries = []
