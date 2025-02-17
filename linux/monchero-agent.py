@@ -729,17 +729,17 @@ def executable_runner():
             then_time = executable_database[0]['next_check']
         except IndexError:
             # No checks!
-            time.sleep(10)
-            continue
+            then_time = None
 
-        exec_diff = then_time - datetime.now(timezone.utc)
-        if exec_diff.total_seconds() < 0.1:
-            logger.debug("Running executable {}".format(executable_database[0]))
-            new_status = run_executable(executable_database[0])
-            changes = work_out_status_changes(executable_database[0], new_status)
-            action_changes(changes)
-            pop_and_reinsert_executable()
-            continue
+        if then_time is not None:
+            exec_diff = then_time - datetime.now(timezone.utc)
+            if exec_diff.total_seconds() < 0.1:
+                logger.debug("Running executable {}".format(executable_database[0]))
+                new_status = run_executable(executable_database[0])
+                changes = work_out_status_changes(executable_database[0], new_status)
+                action_changes(changes)
+                pop_and_reinsert_executable()
+                continue
 
         save_diff = datetime.now(timezone.utc) - last_state_save_time
         if save_diff.total_seconds() > 50:
@@ -749,10 +749,14 @@ def executable_runner():
             last_state_save_time = datetime.now(timezone.utc)
 
         # Recalculate the wait time so we take into account any time used above
-        exec_diff = then_time - datetime.now(timezone.utc)
-        if exec_diff.total_seconds() > 0.1:
-            logger.debug("sleeping for half of {} (them={})".format(exec_diff.total_seconds(), then_time))
-            time.sleep(exec_diff.total_seconds() / 2)
+        if then_time is not None:
+            exec_diff = then_time - datetime.now(timezone.utc)
+            if exec_diff.total_seconds() > 0.1:
+                logger.debug("sleeping for half of {} (them={})".format(exec_diff.total_seconds(), then_time))
+                time.sleep(exec_diff.total_seconds() / 2)
+        else:
+            # No checks
+            time.sleep(10)
 
 def json_serial(obj):
     """JSON serializer for objects not serializable by default json code"""
