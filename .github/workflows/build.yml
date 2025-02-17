@@ -31,6 +31,17 @@ jobs:
           fpm -s dir -t rpm -p "monchero-agent-${VERSION}-${{ github.run_id }}.rpm" -v "${VERSION}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
           fpm -s dir -t deb -p "monchero-agent-${VERSION}-${{ github.run_id }}.deb" -v "${VERSION}" --iteration ${{ github.run_id }}  -n monchero-agent -m devops -C pkg .
 
+      - name: Save out Apt package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Apt Package
+          path: monchero-agent-*.deb
+      - name: Save out RPM package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RPM Package
+          path: monchero-agent-*.rpm
+
       - name: Save out package artifacts
         uses: actions/upload-artifact@v4
         with:
