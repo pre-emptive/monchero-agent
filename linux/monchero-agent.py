@@ -30,9 +30,16 @@ check_config = {
     'command_config': {},
     'nagios_config': {},
 }
+environment_variables = {}
 config_args = None
 logger = None
 our_hostname = None
+
+# Generally we try to skip hidden or obvious backup files
+def is_backup_file(filename):
+    if filename.startswith('.') or filename.endswith('.bak') or filename.endswith('.rpmsave') or filename.endswith('.old') or filename.endswith('.orig'):
+        return True
+    return False
 
 def to_number(something):
     if type(something) == int or type(something) == float:
@@ -48,6 +55,52 @@ def to_number(something):
         except ValueError:
             raise ValueError("Could not convert '{}' to int".format(something))
     raise ValueError("Could not convert '{}' (type {}) to a number".format(something, str(type(something))))
+
+def run_environment_scripts():
+    global environment_variables
+
+    executable_dir = config_args.environment_setters_directory
+
+    if not os.path.isdir(executable_dir):
+        logger.debug('Environment setters directory {} does not exist'.format(executable_dir))
+        return
+
+    executables = [
+        f for f in os.listdir(executable_dir) if os.path.isfile(os.path.join(executable_dir, f)) and os.access(os.path.join(executable_dir, f),os.X_OK)
+    ]
+    for executable in executables:
+        # Skip hidden files and common backup suffixes
+        if is_backup_file(executable):
+            continue
+        filename = os.path.join(executable_dir, executable)
+
+        try:
+            result = subprocess.run(executable, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except OSError as e:
+            logger.warn('Error running environment setter {}: {}'.format(filename, str(e)))
+            continue
+
+        if result.stderr:
+            logger.warning("Environment setter {} emitted some STDERR: {}".format(executable, result.stderr))
+
+        stdout = result.stdout.decode('utf-8')
+
+        for line in stdout.split("\n"):
+            try:
+                key, value = line.split('=', 1)
+            except ValueError:
+                logger.warning('Environment setter {} returned an invalid variable: {}'.format(executable, line))
+                continue
+            value = value.strip('"')
+            value = value.strip("'")
+            if not key.upper().startswith('MONCHERO'):
+                logger.warning("Environment setter {} returned a variable without the 'monchero' prefix: {}".format(executable, key))
+
+            environment_variables[key] = value
+
+    # Set the environment variables for all future child processes to see
+    for key, value in environment_variables.items():
+        os.environ[key] = "{}".format(value)
 
 def insert_executable_into_database(executable):
     global executable_database
@@ -95,7 +148,7 @@ def initialise_executables(executable_dir, executable_type='native', interval=No
 
     for executable in executables:
         # Skip hidden files and common backup suffixes
-        if executable.startswith('.') or executable.endswith('.bak') or  executable.endswith('.rpmsave') or executable.endswith('.old') or executable.endswith('.orig'):
+        if is_backup_file(secutable):
             continue
         filename = os.path.join(executable_dir, executable)
         # DON'T add some jitter this time. This makes us run all the checks initially at full speed
@@ -814,6 +867,10 @@ def load_check_configs():
         return
 
     for filename in os.listdir(config_args.check_config_path):
+        # Skip hidden files and common backup suffixes
+        if is_backup_file(filename):
+            continue
+
         parsed = {}
         try:
             full_path = os.path.join(config_args.check_config_path, filename)
@@ -865,6 +922,7 @@ def main(argv=None):
     parser.add('--monchero-plugin-directory', default='/usr/lib/monchero/plugins', help='The directory to look for Monchero check plugins', env_var='MONCHERO_PLUGIN_DIRECTORY')
     parser.add('--checkmk-plugin-directory', default='/usr/lib/check_mk_agent/local/', help='The directory to look for CheckMK local plugins', env_var='MONCHERO_CHECKMK_PLUGIN_DIRECTORY')
     parser.add('--script-checks-directory', default='/usr/lib/monchero/scripts', help='The directory to look for plain script checks', env_var='MONCHERO_SCRIPT_CHECKS_DIRECTORY')
+    parser.add('--environment-setters-directory', default='/usr/lib/monchero/env', help='The directory of env scripts to run when the agent starts', env_var='MONCHERO_ENVIRONMENT_SETTERS_DIRECTORY')
     parser.add('-m', '--monchero-server', default=None, help='The poller or server to which the agent will send status', env_var='MONCHERO_SERVER')
     parser.add('--monchero-server-tls', default=True, type=bool, help='Use TLS to send to the Monchero server', env_var='MONCHERO_SERVER_TLS')
     parser.add('--monchero-server-timeout', default=30, type=int, help='The number of seconds timeout when sending to the Monchero server', env_var='MONCHERO_SERVER_TIMEOUT')
@@ -885,6 +943,7 @@ def main(argv=None):
 
     try:
         load_check_configs()
+        run_environment_scripts()
         initialise_executables(config_args.monchero_plugin_directory, 'native')
         initialise_executables(config_args.checkmk_plugin_directory, 'checkmk')
         initialise_executables(config_args.script_checks_directory, 'script')
@@ -1003,3 +1062,12 @@ class TestCase(unittest.TestCase):
         assert to_number("-55.55") == -55.55
         self.assertRaises(ValueError, to_number, {})
         self.assertRaises(ValueError, to_number, '123.45.56')
+
+    def test_is_backup_file(self):
+        assert is_backup_file('fred.sh') == False
+        assert is_backup_file('.hidden') == True
+        assert is_backup_file('fred.sh.old') == True
+        assert is_backup_file('fred.sh.rpmsave') == True
+        assert is_backup_file('fred.sh.orig') == True
+        assert is_backup_file('fred.sh.bak') == True
+
