@@ -148,7 +148,7 @@ def initialise_executables(executable_dir, executable_type='native', interval=No
 
     for executable in executables:
         # Skip hidden files and common backup suffixes
-        if is_backup_file(secutable):
+        if is_backup_file(executable):
             continue
         filename = os.path.join(executable_dir, executable)
         # DON'T add some jitter this time. This makes us run all the checks initially at full speed
