@@ -8,7 +8,7 @@ echo "check_name: Memory"
 echo "metrics:"
 
 if [ -n "${MONCHERO_AGENT_IS_DOCKERIZED}" ]; then
-	if [ -n "${IS_CGROUP_V2}" ]; then
+	if [ -n "${MONCHERO_AGENT_IS_CGROUP_V2}" ]; then
 		FILE="/sys/fs/cgroup/memory.stat"
 	else
 		FILE="/sys/fs/cgroup/memory/memory.stat"
@@ -21,7 +21,7 @@ if [ -n "${MONCHERO_AGENT_IS_DOCKERIZED}" ]; then
 
 		declare MEM_${FIELDS[0]}=${FIELDS[1]}
 	done < ${FILE}
-	if [ -n "${IS_CGROUP_V2}" ]; then
+	if [ -n "${MONCHERO_AGENT_IS_CGROUP_V2}" ]; then
 		MEM_CURRENT=`cat /sys/fs/cgroup/memory.current`
 		echo "  MemeoryCurrent:"
 		echo "    value: ${MEM_CURRENT}"
