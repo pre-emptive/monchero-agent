@@ -1,13 +1,15 @@
 #!/bin/bash
 
+# Part of Monchero Agent
+# (C) 2025 Pre-Emptive Limited. GNU Public License v2 licensed.
+
 WARNING_MIN=80
 CRITICAL_MIN=90
 
 # This lifted from CheckMK: https://github.com/Checkmk/checkmk/blob/5c22d0bd48b504232b8093630e8cb9813c9f1da2/agents/check_mk_agent.linux#L686
 if [ -n "${MONCHERO_AGENT_IS_DOCKERIZED}" ]; then
-    return
+    exit 1
 fi
-
 # The exclusion list is getting a bit of a problem.
 # -l should hide any remote FS but seems to be all but working.
 excludefs="-x smbfs -x cifs -x iso9660 -x udf -x nfsv4 -x nfs -x mvfs -x prl_fs -x squashfs -x devtmpfs -x autofs -x beegfs"
@@ -31,7 +33,7 @@ do
 
 	echo "- status: OK"
 	echo "  message: ${MSG[2]} of ${MSG[1]} (${CAPACITY}%) used, ${MSG[3]} available"
-	echo "  check_name: \"Diskspace ${FIELDS[6]}\""
+	echo "  check_name: \"Disk space ${FIELDS[6]}\""
 	echo "  metrics:"
 	echo "    blocks:"
 	echo "      value: ${FIELDS[2]}"

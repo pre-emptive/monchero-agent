@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Part of Monchero Agent
+# (C) 2025 Pre-Emptive Limited. GNU Public License v2 licensed.
+
 WARNING_MIN=80
 CRITICAL_MIN=90
 

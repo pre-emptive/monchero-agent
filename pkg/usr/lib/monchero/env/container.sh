@@ -1,6 +1,9 @@
 #!/bin/bash
 # Container detection
 
+# Part of Monchero Agent
+# (C) 2025 Pre-Emptive Limited. GNU Public License v2 licensed.
+
 # This function more or less firectly lifted from CheckMK's agent
 # https://github.com/Checkmk/checkmk/blob/5c22d0bd48b504232b8093630e8cb9813c9f1da2/agents/check_mk_agent.linux#L332
 detect_container_environment() {
