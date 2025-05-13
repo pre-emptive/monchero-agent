@@ -292,6 +292,7 @@ def parse_checkmk_output(output, executable):
         except IndexError:
             logger.debug("Skipping malformed line '{}' from {}".format(line, executable['filename']))
             continue
+            continue
 
         try:
             status = int(status)
@@ -597,25 +598,6 @@ def run_executable(executable):
 
     return new_status
 
-def test_monchero_plugin(path_to_plugin):
-    executable = {
-        'filename': path_to_plugin,
-        'executable_type': 'native',
-    }
-    new_statuses = run_executable(executable)
-    if new_statuses is None:
-        print('Plugin did not return valid output')
-        return 1
-    for check, new in new_statuses.items():
-        try:
-            if not new['status']:
-                print('Plugin did not return a valid status for check {}'.format(check))
-                return 3
-        except KeyError:
-            print('Plugin did not return valid status information for check {}'.format(check))
-            return 2
-    return 0
-
 def check_metric_in_range(metric):
     statuses = {
         'critical': 'Critical',
@@ -855,7 +837,7 @@ def save_state():
 
 def send_state_to_server():
     protocol = 'https'
-    if config_args.monchero_server_no_tls:
+    if not config_args.monchero_server_tls:
         protocol = 'http'
 
     data = {
@@ -943,17 +925,10 @@ def main(argv=None):
     parser.add('--script-checks-directory', default='/usr/lib/monchero/scripts', help='The directory to look for plain script checks', env_var='MONCHERO_SCRIPT_CHECKS_DIRECTORY')
     parser.add('--environment-setters-directory', default='/usr/lib/monchero/env', help='The directory of env scripts to run when the agent starts', env_var='MONCHERO_ENVIRONMENT_SETTERS_DIRECTORY')
     parser.add('-m', '--monchero-server', default=None, help='The poller or server to which the agent will send status', env_var='MONCHERO_SERVER')
-    parser.add('--monchero-server-no-tls', action='store_true', help='Do not use TLS to send to the Monchero server', env_var='MONCHERO_SERVER_TLS')
+    parser.add('--monchero-server-tls', default=True, type=bool, help='Use TLS to send to the Monchero server', env_var='MONCHERO_SERVER_TLS')
     parser.add('--monchero-server-timeout', default=30, type=int, help='The number of seconds timeout when sending to the Monchero server', env_var='MONCHERO_SERVER_TIMEOUT')
-    parser.add('--version', action='store_true', help='Returns the version of the agent and quits')
-
-    parser.add('--test-monchero-plugin', help='Try running a Monchero plugin and verify its output')
 
     config_args = parser.parse_args()
-
-    if config_args.version:
-        print("{}".format(VERSION))
-        sys.exit(0)
 
     logging_format = '%(message)s'
     if config_args.log_level == 'debug':
@@ -970,8 +945,6 @@ def main(argv=None):
     try:
         load_check_configs()
         run_environment_scripts()
-        if config_args.test_monchero_plugin:
-            return test_monchero_plugin(config_args.test_monchero_plugin)
         initialise_executables(config_args.monchero_plugin_directory, 'native')
         initialise_executables(config_args.checkmk_plugin_directory, 'checkmk')
         initialise_executables(config_args.script_checks_directory, 'script')
@@ -988,6 +961,8 @@ if __name__ == "__main__":
 
 # Run these with: python3 -m unittest monchero-agent.py
 import unittest
+from unittest.mock import patch
+import subprocess
 
 logger = logging.getLogger()
 logger.level = logging.DEBUG
@@ -1098,4 +1073,15 @@ class TestCase(unittest.TestCase):
         assert is_backup_file('fred.sh.rpmsave') == True
         assert is_backup_file('fred.sh.orig') == True
         assert is_backup_file('fred.sh.bak') == True
+
+    @patch('subprocess.run')
+    def test_run_executable(self, mock_call):
+        executable = {'filename': '/some/file', 'executable_type': 'native'}
+        run_executable(executable)
+        self.assertTrue(mock_call.called)
+        self.assertEqual(mock_call.call_args[0], ('echo',))
+        self.assertEqual(mock_call.call_args[1]['shell'], False)
+        self.assertEqual(mock_call.call_args[2]['stdin'], None)
+        self.assertEqual(mock_call.call_args[3]['stdout'], None)
+        self.assertEqual(mock_call.call_args[4]['stderr'], None)
 
